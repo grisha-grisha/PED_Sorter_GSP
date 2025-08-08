@@ -1,0 +1,2 @@
+pyside6-uic PED_design.ui -o PED_design.py # для преобразования ui в py
+
