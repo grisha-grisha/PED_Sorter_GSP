@@ -18,7 +18,7 @@ from PySide6.QtGui import (QBrush, QColor, QConicalGradient, QCursor,
 from PySide6.QtWidgets import (QApplication, QCheckBox, QFrame, QHeaderView,
     QLabel, QMainWindow, QMenuBar, QPushButton,
     QSizePolicy, QStatusBar, QTableWidget, QTableWidgetItem,
-    QWidget)
+    QToolButton, QWidget)
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
@@ -42,6 +42,11 @@ class Ui_MainWindow(object):
         self.DirectoryName = QLabel(self.frame_2)
         self.DirectoryName.setObjectName(u"DirectoryName")
         self.DirectoryName.setGeometry(QRect(160, 40, 591, 31))
+        font = QFont()
+        font.setBold(True)
+        self.DirectoryName.setFont(font)
+        self.DirectoryName.setWordWrap(False)
+        self.DirectoryName.setTextInteractionFlags(Qt.LinksAccessibleByMouse|Qt.TextSelectableByMouse)
         self.ChoosePEDButton = QPushButton(self.frame_2)
         self.ChoosePEDButton.setObjectName(u"ChoosePEDButton")
         self.ChoosePEDButton.setGeometry(QRect(10, 10, 91, 31))
@@ -50,7 +55,7 @@ class Ui_MainWindow(object):
         self.label_7.setGeometry(QRect(10, 40, 141, 31))
         self.files_frame = QFrame(self.frame)
         self.files_frame.setObjectName(u"files_frame")
-        self.files_frame.setEnabled(False)
+        self.files_frame.setEnabled(True)
         self.files_frame.setGeometry(QRect(20, 100, 1291, 641))
         self.files_frame.setFrameShape(QFrame.StyledPanel)
         self.files_frame.setFrameShadow(QFrame.Plain)
@@ -66,8 +71,9 @@ class Ui_MainWindow(object):
         self.SearchButton.setGeometry(QRect(10, 190, 91, 31))
         self.checkBox_15 = QCheckBox(self.files_frame)
         self.checkBox_15.setObjectName(u"checkBox_15")
+        self.checkBox_15.setEnabled(True)
         self.checkBox_15.setGeometry(QRect(10, 60, 141, 21))
-        self.checkBox_15.setCheckable(False)
+        self.checkBox_15.setCheckable(True)
         self.checkBox_17 = QCheckBox(self.files_frame)
         self.checkBox_17.setObjectName(u"checkBox_17")
         self.checkBox_17.setGeometry(QRect(10, 120, 261, 21))
@@ -97,8 +103,6 @@ class Ui_MainWindow(object):
         self.Table = QTableWidget(self.files_frame)
         if (self.Table.columnCount() < 5):
             self.Table.setColumnCount(5)
-        font = QFont()
-        font.setBold(True)
         __qtablewidgetitem = QTableWidgetItem()
         __qtablewidgetitem.setFont(font);
         __qtablewidgetitem.setBackground(QColor(199, 199, 199));
@@ -118,17 +122,20 @@ class Ui_MainWindow(object):
         __qtablewidgetitem4.setFont(font);
         self.Table.setHorizontalHeaderItem(4, __qtablewidgetitem4)
         self.Table.setObjectName(u"Table")
-        self.Table.setGeometry(QRect(310, 40, 971, 591))
+        self.Table.setGeometry(QRect(290, 40, 971, 591))
         self.Table.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.Table.setAlternatingRowColors(True)
         self.Table.horizontalHeader().setDefaultSectionSize(180)
-        self.label_10 = QLabel(self.files_frame)
-        self.label_10.setObjectName(u"label_10")
-        self.label_10.setGeometry(QRect(140, 40, 161, 21))
         self.SearchButton_2 = QPushButton(self.files_frame)
         self.SearchButton_2.setObjectName(u"SearchButton_2")
         self.SearchButton_2.setEnabled(False)
         self.SearchButton_2.setGeometry(QRect(110, 190, 91, 31))
+        self.tagButton_1 = QToolButton(self.files_frame)
+        self.tagButton_1.setObjectName(u"tagButton_1")
+        self.tagButton_1.setGeometry(QRect(140, 40, 31, 21))
+        self.tagButton_2 = QToolButton(self.files_frame)
+        self.tagButton_2.setObjectName(u"tagButton_2")
+        self.tagButton_2.setGeometry(QRect(140, 60, 31, 21))
         MainWindow.setCentralWidget(self.centralwidget)
         self.menubar = QMenuBar(MainWindow)
         self.menubar.setObjectName(u"menubar")
@@ -159,7 +166,7 @@ class Ui_MainWindow(object):
         self.label_8.setText(QCoreApplication.translate("MainWindow", u"\u0418\u0441\u043a\u0430\u0442\u044c \u0444\u0430\u0439\u043b\u044b:", None))
         self.label_9.setText(QCoreApplication.translate("MainWindow", u"\u041e\u0431\u043d\u0430\u0440\u0443\u0436\u0435\u043d\u043d\u044b\u0435 \u0444\u0430\u0439\u043b\u044b:", None))
         ___qtablewidgetitem = self.Table.horizontalHeaderItem(0)
-        ___qtablewidgetitem.setText(QCoreApplication.translate("MainWindow", u"\u0418\u043c\u044f", None));
+        ___qtablewidgetitem.setText(QCoreApplication.translate("MainWindow", u"\u0418\u043c\u044f (\u0434\u0432\u043e\u0439\u043d\u043e\u0435 \u043d\u0430\u0436\u0430\u0442\u0438\u0435 - \u043e\u0442\u043a\u0440\u044b\u0442\u044c)", None));
         ___qtablewidgetitem1 = self.Table.horizontalHeaderItem(1)
         ___qtablewidgetitem1.setText(QCoreApplication.translate("MainWindow", u"\u041f\u0440\u0435\u0434\u043f\u043e\u043b\u0430\u0433\u0430\u0435\u043c\u044b\u0439 \u0442\u0438\u043f", None));
         ___qtablewidgetitem2 = self.Table.horizontalHeaderItem(2)
@@ -168,7 +175,8 @@ class Ui_MainWindow(object):
         ___qtablewidgetitem3.setText(QCoreApplication.translate("MainWindow", u"\u041d\u043e\u0432\u043e\u0435 \u0438\u043c\u044f", None));
         ___qtablewidgetitem4 = self.Table.horizontalHeaderItem(4)
         ___qtablewidgetitem4.setText(QCoreApplication.translate("MainWindow", u"\u041f\u0435\u0440\u0435\u0438\u043c\u0435\u043d\u043e\u0432\u0430\u0442\u044c?", None));
-        self.label_10.setText(QCoreApplication.translate("MainWindow", u"(\u0442\u044d\u0433\u0438: '\u043b\u0441'; '\u043b\u043e\u043a\u0430\u043b\u044c\u043d\u0430\u044f \u0441\u043c\u0435\u0442\u0430')", None))
         self.SearchButton_2.setText(QCoreApplication.translate("MainWindow", u"\u041f\u0435\u0440\u0435\u0438\u043c\u0435\u043d\u043e\u0432\u0430\u0442\u044c", None))
+        self.tagButton_1.setText(QCoreApplication.translate("MainWindow", u"\u0442\u044d\u0433\u0438", None))
+        self.tagButton_2.setText(QCoreApplication.translate("MainWindow", u"\u0442\u044d\u0433\u0438", None))
     # retranslateUi
 
