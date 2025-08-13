@@ -20,142 +20,15 @@ class TagsManager:
         self.exec_dir = Path(__file__).parent.absolute()
         self.tags_file = self.exec_dir / 'name_tags_base1.json'
         self.tags_data = self._load_tags()
-        self.tags_data = self._load_tags()
-        self.logger = setup_logging()
 
     def _load_tags(self):
         """Загружает теги из файла или создает новый с дефолтными значениями"""
         default_tags = {
-                "1": {
-                    "name": "Локальная смета",
-                    "tags": ["локальная смета", "лс"],
-                    "mask": "ЛС-ОС-ПН-ВЕРНН-КОММ"
-                },
-                "2": {
-                    "name": "Объектная смета",
-                    "tags": ["объектная смета", "ос"],
-                    "mask": "ОС-ГС-ПН-ВЕРНН-КОММ"
-                },
-                "3": {
-                    "name": "Сводный сметный расчет",
-                    "tags": ["cводный сметный расчет", "расчет", "сср"],
-                    "mask": "ССР-ПН-ВЕРНН-КОММ"
-                },
-                "4": {
-                    "name": "Сводный реестр сметной документации",
-                    "tags": ["cводный реестр сметной документации", "реестр", "срсд", "рд"],
-                    "mask": "СРСД-ВЕРНН-КОММ"
-                },
-                "5": {
-                    "name": "Сметные расчеты на отдельные виды затрат ",
-                    "tags": ["cметные расчеты на отдельные виды затрат", "сровз"],
-                    "mask": "СРОВЗ-ВЕРНН-КОММ"
-                },
-                "6": {
-                    "name": "Сравнительная таблица изменения стоимости МТР по договору подряда (Форма 1.3)",
-                    "tags": ["таблица", "МТР", "форма1.3"],
-                    "mask": "ФОРМА1.3-ВЕРНН-КОММ"
-                },
-                "7": {
-                    "name": "Расчеты на прочие затраты",
-                    "tags": ["расчеты на прочие затраты", "прочие затраты", "рпз"],
-                    "mask": "ПРОЧ-ТИП-ВЕРНН-КОММ"
-                },
-                "7.1": {
-                    "name": "Перевозка",
-                    "tags": ["перевозка"],
-                    "mask": "ПРОЧ-Перевозка-ВЕРНН-КОММ"
-                },
-                "7.2": {
-                    "name": "Командировочные расходы",
-                    "tags": ["командировочные расходы"],
-                    "mask": "ПРОЧ-Командировочные-ВЕРНН-КОММ"
-                },
-                "7.3": {
-                    "name": "Перебазировка",
-                    "tags": ["перебазировка"],
-                    "mask": "ПРОЧ-Перебазировка-ВЕРНН-КОММ"
-                },
-                "7.4": {
-                    "name": "Затраты на охрану труда",
-                    "tags": ["охрана труда"],
-                    "mask": "ПРОЧ-ОхранаТруда-ВЕРНН-КОММ"
-                },
-                "7.5": {
-                    "name": "Затраты на проведение пусконаладочных работ (ПНР)",
-                    "tags": ["пнр", "затраты на пнр"],
-                    "mask": "ПРОЧ-ПНР-ВЕРНН-КОММ"
-                },
-                "7.6": {
-                    "name": "Устройство дорог",
-                    "tags": ["устройство дорог"],
-                    "mask": "ПРОЧ-УстройствоДорог-ВЕРНН-КОММ"
-                },
-                "7.7": {
-                    "name": "Дополнительные затраты при производстве работ в зимнее время",
-                    "tags": ["зу"],
-                    "mask": "ПРОЧ-ЗУ-ВЕРНН-КОММ"
-                },
-                "7.8": {
-                    "name": "Утилизация отходов",
-                    "tags": ["утилизация отходов", "утилизация"],
-                    "mask": "ПРОЧ-УтилизацияОтходов-ВЕРНН-КОММ"
-                },
-                "7.9": {
-                    "name": "Плата за негативное воздействие на окружающую среду (НВОС)",
-                    "tags": ["негативное", "воздействие", "окружающую", "нвос"],
-                    "mask": "ПРОЧ-НВОС-ВЕРНН-КОММ"
-                },
-                "7.10": {
-                    "name": "Транспортировка",
-                    "tags": ["транспортировка"],
-                    "mask": "ПРОЧ-Транспортировка-ВЕРНН-КОММ"
-                },
-                "7.11": {
-                    "name": "Плавсредства",
-                    "tags": ["плавсредства"],
-                    "mask": "ПРОЧ-Плавсредства-ВЕРНН-КОММ"
-                },
-                "7.12": {
-                    "name": "Затраты на мониторинг компонентов окружающей среды (ПЭМ)",
-                    "tags": ["пэм", "мониторинг", "компонентов"],
-                    "mask": "ПРОЧ-ПЭМ-ВЕРНН-КОММ"
-                },
-                "8": {
-                    "name": "Подтверждающие документы",
-                    "tags": ["подтв"],
-                    "mask": "ПОДТВ-ТИП-ТИППРОЧ-ПН-ВЕРНН-КОММ"
-                },
-                "8.1": {
-                    "name": "Ведомость объемов работ",
-                    "tags": ["ведомость объемов работ"],
-                    "mask": "ПОДТВ-ВОР-ПН-ВЕРНН-КОММ"
-                },
-                "8.2": {
-                    "name": "Дефектная ведомость",
-                    "tags": ["дефектная ведомость", "ДВ", "ВД"],
-                    "mask": "ПОДТВ-ДВ-ПН-ВЕРНН-КОММ"
-                },
-                "8.3": {
-                    "name": "Коммерческое предложение",
-                    "tags": ["коммерческое", "ткп", "кп"],
-                    "mask": "ПОДТВ-КП-ПН-ВЕРНН-КОММ"
-                },
-                "8.4": {
-                    "name": "Транспортная схема",
-                    "tags": ["тс", "транспортная схема"],
-                    "mask": "ПОДТВ-ТС-ПН-ВЕРНН-КОММ"
-                },
-                "8.5": {
-                    "name": "Обоснование к расчету прочих затрат",
-                    "tags": ["обоснование", "", ""],
-                    "mask": "ПОДТВ-ОбоснованиеПрочих-ТИППРОЧ-ПН-ВЕРНН-КОММ"
-                },
-                "8.6": {
-                    "name": "Конъюнктурный анализ",
-                    "tags": ["конъюнктурный", "ка"],
-                    "mask": "ПОДТВ-КА-ПН-ВЕРНН-КОММ"
-                }
+            "1": {
+                "type": "Локальная смета",
+                "tags": ["локальная смета", "лс"],
+                "mask": "ЛС-ОС-ПН-ВЕРНН-КОММ"
+            },
         }
         try:
             if not self.tags_file.exists():
@@ -199,6 +72,12 @@ class TagsManager:
             return True
         return False
 
+    def change_mask(self, type_id, new_mask):
+        type_id = str(type_id)
+        if type_id not in self.tags_data:
+            return False
+        self.tags_data[type_id]["mask"] = new_mask
+        return True
 
 class TagsWindow(QtWidgets.QMainWindow):
     def __init__(self, type_id, tags_manager, parent=None):
@@ -214,22 +93,30 @@ class TagsWindow(QtWidgets.QMainWindow):
         """Заполняет окно данными"""
         type_data = self.tags_manager.get_type_data(self.type_id)
         if type_data:
-            self.ui.type_label.setText(type_data["name"])
+            self.ui.type_label.setText(type_data["type"])
             self.ui.TagList.addItems(type_data["tags"])
+            self.ui.mask_lineEdit.setText(type_data["mask"])
         
     def _connect_signals(self):
         """Подключает сигналы кнопок"""
         self.ui.add_tag.clicked.connect(self._add_tag)
         self.ui.delete_tag.clicked.connect(self._delete_tag)
-        self.ui.lineEdit.returnPressed.connect(self._add_tag)
-        
+        self.ui.tag_lineEdit.returnPressed.connect(self._add_tag)
+        self.ui.save_mask.clicked.connect(self._change_mask)
+    
+    def _change_mask(self):
+        """"Корректирует маску"""
+        new_mask = self.ui.mask_lineEdit.text().strip()
+        if new_mask:
+            self.tags_manager.change_mask(self.type_id, new_mask)
+
     def _add_tag(self):
         """Добавляет новый тег"""
-        new_tag = self.ui.lineEdit.text().strip()
+        new_tag = self.ui.tag_lineEdit.text().strip()
         if new_tag:
             if self.tags_manager.add_tag(self.type_id, new_tag):
                 self.ui.TagList.addItem(new_tag)
-                self.ui.lineEdit.clear()
+                self.ui.tag_lineEdit.clear()
                 
     def _delete_tag(self):
         """Удаляет выбранный тег"""
@@ -254,39 +141,47 @@ class PEDSorterApp(QtWidgets.QMainWindow):
             'local_estimate': '1. (локальная смета)',
             }
         self.logger = setup_logging()
-        self.filenames = dict() #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! обнуляй список при выборе новой дирректории!!!!!!!!!!!!!!!!!!!!
-        self.tags_manager = TagsManager()
-        self._setup_tag_buttons()
+        self.filenames = dict()
         self.ui.Table.cellDoubleClicked.connect(self.open_file_in_explorer)
+        self.directory = ''
+        self.ui.SearchButton.clicked.connect(self.traverse_directory)
+        self.tags_manager = TagsManager()
+        self._populate_files_list()
+        self.ui.FilesList.itemDoubleClicked.connect(self._on_file_double_clicked)
 
-    def _setup_tag_buttons(self):
-        """Связывает кнопки тегов с обработчиками"""
-        self.ui.tagButton_1.clicked.connect(
-            lambda: self._open_tags_window('1')
-        )
-        self.ui.tagButton_2.clicked.connect(
-            lambda: self._open_tags_window('2')
-        )
     def _open_tags_window(self, type_id):
         """Открывает окно управления тегами"""
         self.tags_window = TagsWindow(type_id, self.tags_manager, self)
         self.tags_window.show()
     
+    def _populate_files_list(self):
+        """Заполняет FilesList всеми типами файлов из JSON"""
+        self.ui.FilesList.clear()
+        for type_id, type_data in self.tags_manager.tags_data.items():
+            item_text = f"{type_id} - {type_data['type']}"
+            item = QtWidgets.QListWidgetItem(item_text)
+            item.setData(QtCore.Qt.UserRole, type_id)
+            self.ui.FilesList.addItem(item)
+
+    def _on_file_double_clicked(self, item):
+        """Обработчик двойного клика по перечню файлов"""
+        type_id = item.data(QtCore.Qt.UserRole)
+        self._open_tags_window(type_id)
+
     def choose_ped(self):
         '''Обработчик кнопки "Выбрать ПСД".'''
         directory = QtWidgets.QFileDialog.getExistingDirectory(self, "Выберите папку ПСД")
         if directory:
             self.ui.DirectoryName.setText(directory)
-            self.ui.files_frame.setEnabled(True)
             self.ui.SearchButton.setEnabled(True)
-            self.ui.SearchButton.clicked.connect(lambda: self.traverse_directory(directory))
+            self.directory = directory
         else:
-            self.ui.files_frame.setEnabled(False)
             self.ui.SearchButton.setEnabled(False)
     
-    def traverse_directory(self, directory):
+    def traverse_directory(self):
         '''Обходит выбранную директорию и все поддиректории.'''
-        for root, _, files in os.walk(directory):
+        self.filenames = dict()
+        for root, _, files in os.walk(self.directory):
             for filename in files:
                 filepath = Path(root) / filename
                 extension = filepath.suffix.lower()
@@ -295,15 +190,15 @@ class PEDSorterApp(QtWidgets.QMainWindow):
                 mask = self.UNKNOWN
                 for type_id, type_data in self.tags_manager.tags_data.items():
                     if any(tag.lower() in filename.lower() for tag in type_data["tags"]):
-                        file_type = type_data["name"]
+                        type = type_data["type"]
                         mask = type_data.get("mask", self.UNKNOWN)
-                    if type_id == "1" and extension in ['.xls', '.xlsx']:
-                        new_name = self.create_name_for_local_estimate(filepath)
-                    else:
-                        new_name = f"{mask}{extension}"
-                    break
-
-                self.filenames[filename] = {
+                        if type_id == "1":
+                            if extension in ['.xls', '.xlsx']:
+                                new_name = self.create_name_for_local_estimate(filepath) 
+                            else:
+                                new_name = mask
+                            continue
+                self.filenames[filename] = { #ДОБАВИТЬ СЮДА БУРДУ ТИПА "ПАКЕТ" ?
                     'type': type,
                     'new_name': new_name,
                     'mask': mask,

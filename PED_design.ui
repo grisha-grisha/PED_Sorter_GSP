@@ -129,154 +129,23 @@
      <property name="midLineWidth">
       <number>3</number>
      </property>
-     <widget class="QCheckBox" name="checkBox_1">
-      <property name="geometry">
-       <rect>
-        <x>10</x>
-        <y>40</y>
-        <width>141</width>
-        <height>21</height>
-       </rect>
-      </property>
-      <property name="text">
-       <string>1. Локальная смета</string>
-      </property>
-      <property name="checked">
-       <bool>true</bool>
-      </property>
-     </widget>
-     <widget class="QPushButton" name="SearchButton">
-      <property name="enabled">
-       <bool>false</bool>
-      </property>
-      <property name="geometry">
-       <rect>
-        <x>10</x>
-        <y>190</y>
-        <width>91</width>
-        <height>31</height>
-       </rect>
-      </property>
-      <property name="text">
-       <string>Искать</string>
-      </property>
-     </widget>
-     <widget class="QCheckBox" name="checkBox_15">
-      <property name="enabled">
-       <bool>true</bool>
-      </property>
-      <property name="geometry">
-       <rect>
-        <x>10</x>
-        <y>60</y>
-        <width>141</width>
-        <height>21</height>
-       </rect>
-      </property>
-      <property name="text">
-       <string>2. Объектная смета</string>
-      </property>
-      <property name="checkable">
-       <bool>true</bool>
-      </property>
-     </widget>
-     <widget class="QCheckBox" name="checkBox_17">
-      <property name="geometry">
-       <rect>
-        <x>10</x>
-        <y>120</y>
-        <width>261</width>
-        <height>21</height>
-       </rect>
-      </property>
-      <property name="text">
-       <string>7. Расчеты на прочие затраты</string>
-      </property>
-      <property name="checkable">
-       <bool>false</bool>
-      </property>
-     </widget>
-     <widget class="QCheckBox" name="checkBox_18">
-      <property name="geometry">
-       <rect>
-        <x>10</x>
-        <y>160</y>
-        <width>261</width>
-        <height>21</height>
-       </rect>
-      </property>
-      <property name="text">
-       <string>8.1 Ведомость объемов работ</string>
-      </property>
-      <property name="checkable">
-       <bool>false</bool>
-      </property>
-     </widget>
-     <widget class="QCheckBox" name="checkBox_19">
-      <property name="geometry">
-       <rect>
-        <x>10</x>
-        <y>100</y>
-        <width>261</width>
-        <height>21</height>
-       </rect>
-      </property>
-      <property name="text">
-       <string>6. Сравнительная таблица измен. стоимости МТР</string>
-      </property>
-      <property name="checkable">
-       <bool>false</bool>
-      </property>
-     </widget>
-     <widget class="QCheckBox" name="checkBox_20">
-      <property name="geometry">
-       <rect>
-        <x>10</x>
-        <y>80</y>
-        <width>221</width>
-        <height>21</height>
-       </rect>
-      </property>
-      <property name="text">
-       <string>4. Ссводный реестр сметной документации</string>
-      </property>
-      <property name="checkable">
-       <bool>false</bool>
-      </property>
-     </widget>
-     <widget class="QCheckBox" name="checkBox_21">
-      <property name="geometry">
-       <rect>
-        <x>10</x>
-        <y>140</y>
-        <width>261</width>
-        <height>21</height>
-       </rect>
-      </property>
-      <property name="text">
-       <string>7.1 Перевозка</string>
-      </property>
-      <property name="checkable">
-       <bool>false</bool>
-      </property>
-     </widget>
      <widget class="QLabel" name="label_8">
       <property name="geometry">
        <rect>
         <x>10</x>
         <y>10</y>
-        <width>141</width>
+        <width>261</width>
         <height>21</height>
        </rect>
       </property>
       <property name="text">
-       <string>Искать файлы:</string>
+       <string>Перечень файлов пакета сметной документации:</string>
       </property>
      </widget>
      <widget class="QLabel" name="label_9">
       <property name="geometry">
        <rect>
-        <x>310</x>
+        <x>290</x>
         <y>10</y>
         <width>141</width>
         <height>21</height>
@@ -291,7 +160,7 @@
        <rect>
         <x>290</x>
         <y>40</y>
-        <width>971</width>
+        <width>991</width>
         <height>591</height>
        </rect>
       </property>
@@ -307,6 +176,9 @@
       <column>
        <property name="text">
         <string>Имя (двойное нажатие - открыть)</string>
+       </property>
+       <property name="whatsThis">
+        <string extracomment="(двойное нажатие - открыть)"/>
        </property>
        <property name="font">
         <font>
@@ -381,14 +253,29 @@
        </property>
       </column>
      </widget>
+     <widget class="QListWidget" name="FilesList">
+      <property name="geometry">
+       <rect>
+        <x>10</x>
+        <y>40</y>
+        <width>271</width>
+        <height>551</height>
+       </rect>
+      </property>
+      <item>
+       <property name="text">
+        <string>...</string>
+       </property>
+      </item>
+     </widget>
      <widget class="QPushButton" name="SearchButton_2">
       <property name="enabled">
        <bool>false</bool>
       </property>
       <property name="geometry">
        <rect>
-        <x>110</x>
-        <y>190</y>
+        <x>190</x>
+        <y>600</y>
         <width>91</width>
         <height>31</height>
        </rect>
@@ -397,30 +284,20 @@
        <string>Переименовать</string>
       </property>
      </widget>
-     <widget class="QToolButton" name="tagButton_1">
+     <widget class="QPushButton" name="SearchButton">
+      <property name="enabled">
+       <bool>false</bool>
+      </property>
       <property name="geometry">
        <rect>
-        <x>140</x>
-        <y>40</y>
-        <width>31</width>
-        <height>21</height>
+        <x>90</x>
+        <y>600</y>
+        <width>91</width>
+        <height>31</height>
        </rect>
       </property>
       <property name="text">
-       <string>тэги</string>
-      </property>
-     </widget>
-     <widget class="QToolButton" name="tagButton_2">
-      <property name="geometry">
-       <rect>
-        <x>140</x>
-        <y>60</y>
-        <width>31</width>
-        <height>21</height>
-       </rect>
-      </property>
-      <property name="text">
-       <string>тэги</string>
+       <string>Искать</string>
       </property>
      </widget>
     </widget>
