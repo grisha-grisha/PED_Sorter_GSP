@@ -77,6 +77,7 @@ class TagsManager:
         if type_id not in self.tags_data:
             return False
         self.tags_data[type_id]["mask"] = new_mask
+        self._save_tags(self.tags_data)
         return True
 
 class TagsWindow(QtWidgets.QMainWindow):
@@ -177,7 +178,7 @@ class PEDSorterApp(QtWidgets.QMainWindow):
             self.directory = directory
         else:
             self.ui.SearchButton.setEnabled(False)
-    
+
     def traverse_directory(self):
         '''Обходит выбранную директорию и все поддиректории.'''
         self.filenames = dict()
@@ -188,17 +189,30 @@ class PEDSorterApp(QtWidgets.QMainWindow):
                 type = self.UNKNOWN
                 new_name = self.UNKNOWN
                 mask = self.UNKNOWN
+                
+                #выяснить, что за тип:
                 for type_id, type_data in self.tags_manager.tags_data.items():
-                    if any(tag.lower() in filename.lower() for tag in type_data["tags"]):
+                    if any(tag.lower() in filename.lower() for tag in type_data["tags"]): #распознавание тэгов в имени
                         type = type_data["type"]
-                        mask = type_data.get("mask", self.UNKNOWN)
-                        if type_id == "1":
-                            if extension in ['.xls', '.xlsx']:
-                                new_name = self.create_name_for_local_estimate(filepath) 
-                            else:
-                                new_name = mask
-                            continue
-                self.filenames[filename] = { #ДОБАВИТЬ СЮДА БУРДУ ТИПА "ПАКЕТ" ?
+                        mask = type_data["mask"]
+                        break
+                    elif extension in ['.xls', '.xlsx']:
+                        presence_tags_in_file = self.check_if_tags_in_file(type_data["tags"], filepath)
+                        if presence_tags_in_file:
+                            self.logger.debug(f'обнаружен тэг "{presence_tags_in_file}"в файле: {filename}')
+                            type = type_data["type"]
+                            mask = type_data["mask"]
+                            break
+                #сформировать новое имя:
+                if type == "Локальная смета":
+                    if extension in ['.xls', '.xlsx']:
+                        new_name = self.create_name_for_local_estimate(filepath)
+                if type == "Объектная смета":
+                    pass
+                if type == "Сводный сметный расчет":
+                    pass
+
+                self.filenames[filename] = { # ДОБАВИТЬ СЮДА БУРДУ ТИПА "ПАКЕТ" ?
                     'type': type,
                     'new_name': new_name,
                     'mask': mask,
@@ -207,7 +221,42 @@ class PEDSorterApp(QtWidgets.QMainWindow):
                     }
         self.populate_table()
 
-    def create_name_for_local_estimate(self, filepath):
+    def check_if_tags_in_file(self, tags, filepath):
+        """Проверяет, встречаются ли тэги в файле"""
+        if os.path.basename(filepath).startswith('~$'):
+            return False
+        if not os.path.exists(filepath):
+            self.logger.error(f"Файл не существует: {filepath}")
+            return False
+        try:
+            if str(filepath).lower().endswith('.xlsx'):
+                engine = 'openpyxl'
+            elif str(filepath).lower().endswith('.xls'):
+                engine = 'xlrd'
+            else:
+                self.logger.error(f"Неизвестный формат файла: {filepath}")
+                return False
+            file = pd.read_excel(filepath, engine=engine, header=None)
+        except Exception as e:
+            self.logger.error(f"Ошибка чтения файла {filepath}: {str(e)}")
+            return False
+        for i in range(len(file)):
+            row_data = ''.join([str(x).lower() for x in file.iloc[i].values.tolist() if pd.notna(x)])
+            for tag in tags:
+                if tag in row_data:
+                    return row_data
+
+    def new_names_for_duplicated_files(self, filename, data):
+        """Если находятся файлы одинакового имени, но разного расширения, эта функция
+        подтянет новое имя от файла с сформированным именем к другим."""
+        if data['new_name'] == self.UNKNOWN:
+            name_without_ext = os.path.splitext(filename)[0]
+            if name_without_ext + '.xls' in self.filenames.keys():
+                data['new_name'] = self.filenames[name_without_ext + '.xls']['new_name']
+            if name_without_ext + '.xlsx' in self.filenames.keys():
+                data['new_name'] = self.filenames[name_without_ext + '.xlsx']['new_name']
+
+    def create_name_for_local_estimate(self, filepath): # ОБРАБОТАТЬ СОЗДАНИЕ ИМЕН ДЛЯ ЛС ОС ССР
         TARGET_TEXT = ['локальная', 'смета']
         DEFECTIVE_TEXT = ['', ' ']
         ESTIMATE_NUMBER_UNKNOWN = '??-??'
@@ -246,19 +295,11 @@ class PEDSorterApp(QtWidgets.QMainWindow):
                         break
         return f'ЛС-{estimate_number}-{sequence_number}-{version}'
 
-    def check_if_local_estimate(self, filename):
-        '''Проверка тэгов локальной сметы в названии'''
-        type_data = self.tags_manager.get_type_data("1")
-        if not type_data:
-            return False
-        filename_lower = filename.lower()
-        return any(tag.lower() in filename_lower for tag in type_data["tags"])
-
     def populate_table(self):
         '''Заполняет таблицу найденными файлами.'''
         self.ui.Table.setRowCount(len(self.filenames))
         for row, (filename, data) in enumerate(self.filenames.items()):
-
+            self.new_names_for_duplicated_files(filename, data)
             if data['type'] == self.TYPES_NAMES['local_estimate']:
                 if data['new_name'] == self.BASE_NEW_NAME_FOR_LE:
                     name_without_ext = os.path.splitext(filename)[0]
