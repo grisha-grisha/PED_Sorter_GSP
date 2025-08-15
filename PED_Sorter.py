@@ -1,3 +1,4 @@
+import re
 import sys
 import json
 import os
@@ -18,7 +19,7 @@ from tags_window_design import Ui_TagsWindow
 class TagsManager:
     def __init__(self):
         self.exec_dir = Path(__file__).parent.absolute()
-        self.tags_file = self.exec_dir / 'name_tags_base1.json'
+        self.tags_file = self.exec_dir / 'file_types_base.json'
         self.tags_data = self._load_tags()
 
     def _load_tags(self):
@@ -26,9 +27,16 @@ class TagsManager:
         default_tags = {
             "1": {
                 "type": "Локальная смета",
-                "tags": ["локальная смета", "лс"],
-                "mask": "ЛС-ОС-ПН-ВЕРНН-КОММ"
-            },
+                "name_tags": [
+                    "локальная смета",
+                    "лс",
+                    "лc"
+                ],
+                "internal_tags": [
+                    "локальная смета"
+                ],
+                "mask": "ЛС-ГС-ПНо-ПНл-ВЕРНН-КОММ"
+                },
         }
         try:
             if not self.tags_file.exists():
@@ -51,23 +59,22 @@ class TagsManager:
         """Возвращает данные по типу файла"""
         return self.tags_data.get(str(type_id))
 
-    def add_tag(self, type_id, new_tag):
+    def add_tag(self, type_id, new_tag, tag_area):
         """Добавляет новый тег для типа"""
         type_id = str(type_id)
         if type_id not in self.tags_data:
             return False
-        
-        if new_tag not in self.tags_data[type_id]["tags"]:
-            self.tags_data[type_id]["tags"].append(new_tag)
+        if new_tag not in self.tags_data[type_id][tag_area]:
+            self.tags_data[type_id][tag_area].append(new_tag)
             self._save_tags(self.tags_data)
             return True
         return False
 
-    def remove_tag(self, type_id, tag_to_remove):
+    def remove_tag(self, type_id, tag_to_remove, tag_area):
         """Удаляет тег у указанного типа"""
         type_id = str(type_id)
-        if type_id in self.tags_data and tag_to_remove in self.tags_data[type_id]["tags"]:
-            self.tags_data[type_id]["tags"].remove(tag_to_remove)
+        if type_id in self.tags_data and tag_to_remove in self.tags_data[type_id][tag_area]:
+            self.tags_data[type_id][tag_area].remove(tag_to_remove)
             self._save_tags(self.tags_data)
             return True
         return False
@@ -88,20 +95,24 @@ class TagsWindow(QtWidgets.QMainWindow):
         self.type_id = str(type_id)
         self.tags_manager = tags_manager
         self._setup_ui()
+        self.logger = setup_logging()
         self._connect_signals()
-        
+
     def _setup_ui(self):
         """Заполняет окно данными"""
         type_data = self.tags_manager.get_type_data(self.type_id)
         if type_data:
             self.ui.type_label.setText(type_data["type"])
-            self.ui.TagList.addItems(type_data["tags"])
+            self.ui.TagList.addItems(type_data["name_tags"])
+            self.ui.TagList_2.addItems(type_data["internal_tags"])
             self.ui.mask_lineEdit.setText(type_data["mask"])
         
     def _connect_signals(self):
         """Подключает сигналы кнопок"""
-        self.ui.add_tag.clicked.connect(self._add_tag)
-        self.ui.delete_tag.clicked.connect(self._delete_tag)
+        self.ui.add_tag.clicked.connect(lambda: self._add_tag('name_tags'))
+        self.ui.add_tag_2.clicked.connect(lambda: self._add_tag('internal_tags'))
+        self.ui.delete_tag.clicked.connect(lambda: self._delete_tag('name_tags'))
+        self.ui.delete_tag_2.clicked.connect(lambda: self._delete_tag('internal_tags'))
         self.ui.tag_lineEdit.returnPressed.connect(self._add_tag)
         self.ui.save_mask.clicked.connect(self._change_mask)
     
@@ -111,21 +122,37 @@ class TagsWindow(QtWidgets.QMainWindow):
         if new_mask:
             self.tags_manager.change_mask(self.type_id, new_mask)
 
-    def _add_tag(self):
+    def _add_tag(self, tag_area):
         """Добавляет новый тег"""
-        new_tag = self.ui.tag_lineEdit.text().strip()
-        if new_tag:
-            if self.tags_manager.add_tag(self.type_id, new_tag):
-                self.ui.TagList.addItem(new_tag)
-                self.ui.tag_lineEdit.clear()
+        self.logger.debug(f'ДОБАВЛЯЕМ НОВЫЙ ТЭГ: {tag_area}')
+        if tag_area == 'name_tags':
+            new_tag = self.ui.tag_lineEdit.text().strip()
+            if new_tag:
+                if self.tags_manager.add_tag(self.type_id, new_tag, tag_area):
+                    self.ui.TagList.addItem(new_tag)
+                    self.ui.tag_lineEdit.clear()
+        else:
+            new_tag = self.ui.tag_lineEdit_2.text().strip()
+            if new_tag:
+                if self.tags_manager.add_tag(self.type_id, new_tag, tag_area):
+                    self.ui.TagList_2.addItem(new_tag)
+                    self.ui.tag_lineEdit_2.clear()
+        
                 
-    def _delete_tag(self):
+    def _delete_tag(self, tag_area):
         """Удаляет выбранный тег"""
-        selected = self.ui.TagList.currentItem()
-        if selected:
-            tag_to_remove = selected.text()
-            if self.tags_manager.remove_tag(self.type_id, tag_to_remove):
-                self.ui.TagList.takeItem(self.ui.TagList.row(selected))
+        if tag_area == 'name_tags':
+            selected = self.ui.TagList.currentItem()
+            if selected:
+                tag_to_remove = selected.text()
+                if self.tags_manager.remove_tag(self.type_id, tag_to_remove, tag_area):
+                    self.ui.TagList.takeItem(self.ui.TagList.row(selected))
+        else:
+            selected = self.ui.TagList_2.currentItem()
+            if selected:
+                tag_to_remove = selected.text()
+                if self.tags_manager.remove_tag(self.type_id, tag_to_remove, tag_area):
+                    self.ui.TagList_2.takeItem(self.ui.TagList_2.row(selected))
 
 
 class PEDSorterApp(QtWidgets.QMainWindow):
@@ -184,6 +211,8 @@ class PEDSorterApp(QtWidgets.QMainWindow):
         self.filenames = dict()
         for root, _, files in os.walk(self.directory):
             for filename in files:
+                if os.path.basename(filename).startswith('~$'):
+                    continue
                 filepath = Path(root) / filename
                 extension = filepath.suffix.lower()
                 type = self.UNKNOWN
@@ -192,12 +221,13 @@ class PEDSorterApp(QtWidgets.QMainWindow):
                 
                 #выяснить, что за тип:
                 for type_id, type_data in self.tags_manager.tags_data.items():
-                    if any(tag.lower() in filename.lower() for tag in type_data["tags"]): #распознавание тэгов в имени
+                    file_parts = re.split(r'[_\-. ]+', filename.lower())
+                    if any(tag.lower() in file_parts for tag in type_data["name_tags"]): #распознавание тэгов в имени
                         type = type_data["type"]
                         mask = type_data["mask"]
                         break
                     elif extension in ['.xls', '.xlsx']:
-                        presence_tags_in_file = self.check_if_tags_in_file(type_data["tags"], filepath)
+                        presence_tags_in_file = self.check_if_tags_in_file(type_data["internal_tags"], filepath)
                         if presence_tags_in_file:
                             self.logger.debug(f'обнаружен тэг "{presence_tags_in_file}"в файле: {filename}')
                             type = type_data["type"]
@@ -219,12 +249,11 @@ class PEDSorterApp(QtWidgets.QMainWindow):
                     'extension': extension,
                     'filepath': filepath
                     }
+        self.share_info_from_xls_to_duplicates()
         self.populate_table()
 
-    def check_if_tags_in_file(self, tags, filepath):
+    def check_if_tags_in_file(self, internal_tags, filepath):
         """Проверяет, встречаются ли тэги в файле"""
-        if os.path.basename(filepath).startswith('~$'):
-            return False
         if not os.path.exists(filepath):
             self.logger.error(f"Файл не существует: {filepath}")
             return False
@@ -242,19 +271,21 @@ class PEDSorterApp(QtWidgets.QMainWindow):
             return False
         for i in range(len(file)):
             row_data = ''.join([str(x).lower() for x in file.iloc[i].values.tolist() if pd.notna(x)])
-            for tag in tags:
-                if tag in row_data:
+            for tag in internal_tags:
+                if tag.lower() in row_data:
                     return row_data
 
-    def new_names_for_duplicated_files(self, filename, data):
+    def share_info_from_xls_to_duplicates(self):
         """Если находятся файлы одинакового имени, но разного расширения, эта функция
-        подтянет новое имя от файла с сформированным именем к другим."""
-        if data['new_name'] == self.UNKNOWN:
-            name_without_ext = os.path.splitext(filename)[0]
-            if name_without_ext + '.xls' in self.filenames.keys():
-                data['new_name'] = self.filenames[name_without_ext + '.xls']['new_name']
-            if name_without_ext + '.xlsx' in self.filenames.keys():
-                data['new_name'] = self.filenames[name_without_ext + '.xlsx']['new_name']
+        передаст инфу о типе и новом имени от xls файла другим"""
+        for filename, data in self.filenames.items():
+            ext = data['extension']
+            if ext in ['.xls', '.xlsx']:
+                name_without_ext = os.path.splitext(filename)[0]
+                for filename2, data2 in self.filenames.items():
+                    if os.path.splitext(filename2)[0] == name_without_ext and filename != filename2:
+                        data2['new_name'] = data['new_name']
+                        data2['type'] = data['type']
 
     def create_name_for_local_estimate(self, filepath): # ОБРАБОТАТЬ СОЗДАНИЕ ИМЕН ДЛЯ ЛС ОС ССР
         TARGET_TEXT = ['локальная', 'смета']
@@ -299,15 +330,6 @@ class PEDSorterApp(QtWidgets.QMainWindow):
         '''Заполняет таблицу найденными файлами.'''
         self.ui.Table.setRowCount(len(self.filenames))
         for row, (filename, data) in enumerate(self.filenames.items()):
-            self.new_names_for_duplicated_files(filename, data)
-            if data['type'] == self.TYPES_NAMES['local_estimate']:
-                if data['new_name'] == self.BASE_NEW_NAME_FOR_LE:
-                    name_without_ext = os.path.splitext(filename)[0]
-                    if name_without_ext + '.xls' in self.filenames.keys():
-                        data['new_name'] = self.filenames[name_without_ext + '.xls']['new_name']
-                    if name_without_ext + '.xlsx' in self.filenames.keys():
-                        data['new_name'] = self.filenames[name_without_ext + '.xlsx']['new_name']
-
             self.ui.Table.setItem(row, 0, QtWidgets.QTableWidgetItem(filename))
             self.ui.Table.setItem(row, 1, QtWidgets.QTableWidgetItem(data['type']))
             self.ui.Table.setItem(row, 2, QtWidgets.QTableWidgetItem(data['mask']))
