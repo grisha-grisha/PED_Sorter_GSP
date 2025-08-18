@@ -87,6 +87,7 @@ class TagsManager:
         self._save_tags(self.tags_data)
         return True
 
+
 class TagsWindow(QtWidgets.QMainWindow):
     def __init__(self, type_id, tags_manager, parent=None):
         super().__init__(parent)
@@ -218,29 +219,30 @@ class PEDSorterApp(QtWidgets.QMainWindow):
                 type = self.UNKNOWN
                 new_name = self.UNKNOWN
                 mask = self.UNKNOWN
-                
+
                 #выяснить, что за тип:
                 for type_id, type_data in self.tags_manager.tags_data.items():
-                    file_parts = re.split(r'[_\-. ]+', filename.lower())
-                    if any(tag.lower() in file_parts for tag in type_data["name_tags"]): #распознавание тэгов в имени
-                        type = type_data["type"]
-                        mask = type_data["mask"]
-                        break
-                    elif extension in ['.xls', '.xlsx']:
-                        presence_tags_in_file = self.check_if_tags_in_file(type_data["internal_tags"], filepath)
-                        if presence_tags_in_file:
-                            self.logger.debug(f'обнаружен тэг "{presence_tags_in_file}"в файле: {filename}')
+                    if self.ui.search_in_name_checkBox.isChecked():
+                        file_parts = re.split(r'[_\-. ]+', filename.lower())
+                        if any(tag.lower() in file_parts for tag in type_data["name_tags"]): #распознавание тэгов в имени
                             type = type_data["type"]
                             mask = type_data["mask"]
                             break
-                #сформировать новое имя:
-                if type == "Локальная смета":
-                    if extension in ['.xls', '.xlsx']:
-                        new_name = self.create_name_for_local_estimate(filepath)
-                if type == "Объектная смета":
-                    pass
-                if type == "Сводный сметный расчет":
-                    pass
+                    if self.ui.search_in_file_checkBox.isChecked():
+                        if extension in ['.xls', '.xlsx']:
+                            presence_tags_in_file = self.check_if_tags_in_file(type_data["internal_tags"], filepath)
+                            if presence_tags_in_file:
+                                self.logger.debug(f'обнаружен тэг "{presence_tags_in_file}"в файле: {filename}')
+                                type = type_data["type"]
+                                mask = type_data["mask"]
+                                break
+                if extension in ['.xls', '.xlsx']:
+                    if type == 'Локальная смета':
+                        new_name = self.create_name_for_local_estimate(filepath, filename)
+                    if type == 'Объектная смета':
+                        new_name = self.create_name_for_object_estimate(filepath, filename)
+                    if type == 'Сводный сметный расчет':
+                        new_name = self.create_name_for_summary_estimate(filepath, filename)
 
                 self.filenames[filename] = { # ДОБАВИТЬ СЮДА БУРДУ ТИПА "ПАКЕТ" ?
                     'type': type,
@@ -254,30 +256,18 @@ class PEDSorterApp(QtWidgets.QMainWindow):
 
     def check_if_tags_in_file(self, internal_tags, filepath):
         """Проверяет, встречаются ли тэги в файле"""
-        if not os.path.exists(filepath):
-            self.logger.error(f"Файл не существует: {filepath}")
-            return False
-        try:
-            if str(filepath).lower().endswith('.xlsx'):
-                engine = 'openpyxl'
-            elif str(filepath).lower().endswith('.xls'):
-                engine = 'xlrd'
-            else:
-                self.logger.error(f"Неизвестный формат файла: {filepath}")
-                return False
-            file = pd.read_excel(filepath, engine=engine, header=None)
-        except Exception as e:
-            self.logger.error(f"Ошибка чтения файла {filepath}: {str(e)}")
-            return False
-        for i in range(len(file)):
-            row_data = ''.join([str(x).lower() for x in file.iloc[i].values.tolist() if pd.notna(x)])
-            for tag in internal_tags:
-                if tag.lower() in row_data:
-                    return row_data
+        file = self.read_xls_xlsx_file(filepath)
+        if file is not None and not file.empty:
+            for i in range(len(file)):
+                row_data = ''.join([str(x).lower() for x in file.iloc[i].values.tolist() if pd.notna(x)])
+                for tag in internal_tags:
+                    if tag.lower() in row_data:
+                        return row_data
+        return False
 
     def share_info_from_xls_to_duplicates(self):
         """Если находятся файлы одинакового имени, но разного расширения, эта функция
-        передаст инфу о типе и новом имени от xls файла другим"""
+        передаст инфу о типе и новом имени от xls файла тёскам других расширений"""
         for filename, data in self.filenames.items():
             ext = data['extension']
             if ext in ['.xls', '.xlsx']:
@@ -286,21 +276,14 @@ class PEDSorterApp(QtWidgets.QMainWindow):
                     if os.path.splitext(filename2)[0] == name_without_ext and filename != filename2:
                         data2['new_name'] = data['new_name']
                         data2['type'] = data['type']
+                        data2['mask'] = data['mask']
 
-    def create_name_for_local_estimate(self, filepath): # ОБРАБОТАТЬ СОЗДАНИЕ ИМЕН ДЛЯ ЛС ОС ССР
-        TARGET_TEXT = ['локальная', 'смета']
-        DEFECTIVE_TEXT = ['', ' ']
-        ESTIMATE_NUMBER_UNKNOWN = '??-??'
-        estimate_number = ESTIMATE_NUMBER_UNKNOWN
-        sequence_number = '01'
-        version = 'БАЗ'
+    def read_xls_xlsx_file(self, filepath):
         if os.path.basename(filepath).startswith('~$'):
-            return self.BASE_NEW_NAME_FOR_LE
-            
+            return None
         if not os.path.exists(filepath):
-            self.logger.error(f"Файл не существует: {filepath}")
-            return self.BASE_NEW_NAME_FOR_LE
-            
+            self.logger.error(f'Файл не существует: {filepath}')
+            return None
         try:
             if str(filepath).lower().endswith('.xlsx'):
                 engine = 'openpyxl'
@@ -308,23 +291,77 @@ class PEDSorterApp(QtWidgets.QMainWindow):
                 engine = 'xlrd'
             else:
                 self.logger.error(f"Неизвестный формат файла: {filepath}")
-                return self.BASE_NEW_NAME_FOR_LE
-            le_file = pd.read_excel(filepath, engine=engine, header=None)
-
+                return None
+            opened_file = pd.read_excel(filepath, engine=engine, header=None)
         except Exception as e:
             self.logger.error(f"Ошибка чтения файла {filepath}: {str(e)}")
-            return self.BASE_NEW_NAME_FOR_LE
-        
-        for i in range(len(le_file)):
-            row_data = ''.join([str(x).lower() for x in le_file.iloc[i].values.tolist() if pd.notna(x)])
-            for tag in TARGET_TEXT:
-                if tag in row_data:
-                    if '№' in row_data:
-                        estimate_number = row_data.split('№')[-1].strip()
-                        if estimate_number in DEFECTIVE_TEXT:
-                            estimate_number = ESTIMATE_NUMBER_UNKNOWN
-                        break
-        return f'ЛС-{estimate_number}-{sequence_number}-{version}'
+            return None
+        return opened_file
+
+    def create_name_for_local_estimate(self, filepath, filename):
+        """Создает новое имя для локальной сметы: """
+        TARGET_TEXT = ['локальн', 'смета', 'сметный']
+        ESTIMATE_NUMBER_UNKNOWN = '??-??-??'
+        estimate_number = ESTIMATE_NUMBER_UNKNOWN
+        DEFAULT_VERSION = 'БАЗ'
+        version = DEFAULT_VERSION
+        file = self.read_xls_xlsx_file(filepath)
+        lines_to_chek = 20 #в скольких первых строках искать совпадения. весь файл = len(file)
+        if file is not None and not file.empty:
+            for i in range(lines_to_chek):
+                row_data = ''.join([str(x).lower() for x in file.iloc[i].values.tolist() if pd.notna(x)])
+                for tag in list(map(lambda x: x.lower(), TARGET_TEXT)):
+                    if tag in row_data:
+                        if '№' in row_data:
+                            number = row_data.split('№')[-1].strip()
+                            if re.search(r'^\d{2}-\d{2}(?:-\d{2})?$', number):
+                                estimate_number = number
+                                break
+        return f'ЛС-{estimate_number}-{version}-(ex. {filename[:10]}..)'
+
+    def create_name_for_object_estimate(self, filepath, filename):
+        """Создает новое имя для объектной сметы: """
+        TARGET_TEXT = ['объектн', 'смета', 'сметный']
+        ESTIMATE_NUMBER_UNKNOWN = '??-??'
+        estimate_number = ESTIMATE_NUMBER_UNKNOWN
+        DEFAULT_VERSION = 'БАЗ'
+        version = DEFAULT_VERSION
+        file = self.read_xls_xlsx_file(filepath)
+        lines_to_chek = 20 #в скольких первых строках искать совпадения. весь файл = len(file)
+        if file is not None and not file.empty:
+            for i in range(lines_to_chek):
+                row_data = ''.join([str(x).lower() for x in file.iloc[i].values.tolist() if pd.notna(x)])
+                for tag in list(map(lambda x: x.lower(), TARGET_TEXT)):
+                    if tag in row_data:
+                        if '№' in row_data:
+                            number = row_data.split('№')[-1].strip()
+                            temp = re.search(r'^\d{2}(?:-\d{2})?$', number)
+                            if temp:
+                                self.logger.debug(f'!!!!!!!!!{number}!!!!!!!!!! {temp}')
+                                estimate_number = number
+                                break
+        return f'ОС-{estimate_number}-{version}-(ex. {filename[:10]}..)'
+
+    def create_name_for_summary_estimate(self, filepath, filename):
+        """Создает новое имя для сводного сметного расчета: """
+        TARGET_TEXT = ['сводн', 'смета', 'сметный']
+        ESTIMATE_NUMBER_UNKNOWN = '??'
+        estimate_number = ESTIMATE_NUMBER_UNKNOWN
+        DEFAULT_VERSION = 'БАЗ'
+        version = DEFAULT_VERSION
+        file = self.read_xls_xlsx_file(filepath)
+        lines_to_chek = 20 #в скольких первых строках искать совпадения. весь файл = len(file)
+        if file is not None and not file.empty:
+            for i in range(lines_to_chek):
+                row_data = ''.join([str(x).lower() for x in file.iloc[i].values.tolist() if pd.notna(x)])
+                for tag in list(map(lambda x: x.lower(), TARGET_TEXT)):
+                    if tag in row_data:
+                        if '№' in row_data:
+                            number = row_data.split('№')[-1].strip()
+                            if re.search(r'^\d{2}$', number):
+                                estimate_number = number
+                                break
+        return f'ОС-{estimate_number}-{version}-(ex. {filename[:10]}..)'
 
     def populate_table(self):
         '''Заполняет таблицу найденными файлами.'''
@@ -343,8 +380,12 @@ class PEDSorterApp(QtWidgets.QMainWindow):
             else:
                 self.ui.Table.setItem(row, 4, QtWidgets.QTableWidgetItem(''))
             
-            if data['type'] == self.TYPES_NAMES['local_estimate']:
-                color = QtGui.QColor(230, 255, 230)
+            if data['type'] == '?': #ЦВЕТА!
+                color = QtGui.QColor(236, 200, 174)
+                for col in range(self.ui.Table.columnCount()):
+                    self.ui.Table.item(row, col).setBackground(color)
+            else: #ЦВЕТА!
+                color = QtGui.QColor(221, 255, 217)
                 for col in range(self.ui.Table.columnCount()):
                     self.ui.Table.item(row, col).setBackground(color)
 
