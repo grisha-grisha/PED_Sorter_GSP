@@ -159,6 +159,7 @@ class TagsWindow(QtWidgets.QMainWindow):
 class PEDSorterApp(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
+        self.tags_windows = {}
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
         self.ui.ChoosePEDButton.clicked.connect(self.choose_ped)
@@ -177,12 +178,46 @@ class PEDSorterApp(QtWidgets.QMainWindow):
         self.tags_manager = TagsManager()
         self._populate_files_list()
         self.ui.FilesList.itemDoubleClicked.connect(self._on_file_double_clicked)
+        self.EX_NAME_LENGTH = 15
+        self.DEFAULT_VERSION = 'БАЗ'
+        self.DEFAULT_VERSION_NUMBER = ''
+        self.TYPES_7_AND_THEIR_CODENAMES = {
+            'Расчеты на прочие затраты': '?',
+            'Перевозка': "Перевозка",
+            'Командировочные расходы': "Командировочные",
+            'Перебазировка': 'Перебазировка',
+            'Затраты на охрану труда': 'ОхранаТруда',
+            'Затраты на проведение пусконаладочных работ (ПНР)': 'ПНР',
+            'Устройство дорог': 'УстройствоДорог',
+            'Дополнительные затраты при производстве работ в зимнее время (ЗУ)': 'ЗУ',
+            'Плата за негативное воздействие на окружающую среду (НВОС)': 'НВОС',
+            'Транспортировка': 'Транспортировка',
+            'Плавсредства': 'Плавсредства',
+            'Затраты на мониторинг компонентов окружающей среды (ПЭМ)': 'ПЭМ'
+        }
+        self.TYPES_8_AND_THEIR_CODENAMSE = {
+            'Подтверждающие документы': '?',
+            'Ведомость объемов работ': 'ВОР',
+            'Дефектная ведомость': 'ДВ',
+            'Коммерческое предложение': 'КП',
+            'Транспортная схема': 'ТС',
+            'Обоснование к расчету прочих затрат': 'ОбоснованиеПрочих',
+            'Конъюнктурный анализ': 'КА'
+        }
+        self.amount_of_documents_8_type = 0
+
 
     def _open_tags_window(self, type_id):
         """Открывает окно управления тегами"""
-        self.tags_window = TagsWindow(type_id, self.tags_manager, self)
-        self.tags_window.show()
-    
+        if type_id in self.tags_windows:
+            window = self.tags_windows[type_id]
+            window.show()
+            window.raise_()
+        else:
+            window = TagsWindow(type_id, self.tags_manager, self)
+            self.tags_windows[type_id] = window
+            window.show()
+
     def _populate_files_list(self):
         """Заполняет FilesList всеми типами файлов из JSON"""
         self.ui.FilesList.clear()
@@ -199,6 +234,7 @@ class PEDSorterApp(QtWidgets.QMainWindow):
 
     def choose_ped(self):
         '''Обработчик кнопки "Выбрать ПСД".'''
+        self.amount_of_documents_8_type = 0
         directory = QtWidgets.QFileDialog.getExistingDirectory(self, "Выберите папку ПСД")
         if directory:
             self.ui.DirectoryName.setText(directory)
@@ -232,19 +268,30 @@ class PEDSorterApp(QtWidgets.QMainWindow):
                         if extension in ['.xls', '.xlsx']:
                             presence_tags_in_file = self.check_if_tags_in_file(type_data["internal_tags"], filepath)
                             if presence_tags_in_file:
-                                self.logger.debug(f'обнаружен тэг "{presence_tags_in_file}"в файле: {filename}')
                                 type = type_data["type"]
                                 mask = type_data["mask"]
                                 break
-                if extension in ['.xls', '.xlsx']:
-                    if type == 'Локальная смета':
-                        new_name = self.create_name_for_local_estimate(filepath, filename)
-                    if type == 'Объектная смета':
-                        new_name = self.create_name_for_object_estimate(filepath, filename)
-                    if type == 'Сводный сметный расчет':
-                        new_name = self.create_name_for_summary_estimate(filepath, filename)
+                
+                #создание имен:
+                if type == 'Локальная смета':
+                    new_name = self.create_name_for_1_local_estimate(filepath, filename)
+                if type == 'Объектная смета':
+                    new_name = self.create_name_for_2_object_estimate(filepath, filename)
+                if type == 'Сводный сметный расчет':
+                    new_name = self.create_name_for_3_summary_estimate(filepath, filename)
+                if type == 'Сводный реестр сметной документации':
+                    new_name = self.create_name_for_4_register_of_estimates(filepath, filename)
+                if type == 'Сметные расчеты на отдельные виды затрат':
+                    new_name = self.create_name_for_5_specific_types_of_costs(filepath, filename)
+                if type == 'Сравнительная таблица изменения стоимости МТР по договору подряда (Форма 1.3)':
+                    new_name = self.create_name_for_6_MTR_cost_change_table(filepath, filename)
+                if type in self.TYPES_7_AND_THEIR_CODENAMES.keys():
+                    new_name = self.create_name_for_7_other_expenses(filename, type)
+                if type in self.TYPES_8_AND_THEIR_CODENAMSE.keys():
+                    new_name = self.create_name_for_8_supporting_documents(filename, type)
 
-                self.filenames[filename] = { # ДОБАВИТЬ СЮДА БУРДУ ТИПА "ПАКЕТ" ?
+
+                self.filenames[filename] = {
                     'type': type,
                     'new_name': new_name,
                     'mask': mask,
@@ -260,9 +307,16 @@ class PEDSorterApp(QtWidgets.QMainWindow):
         if file is not None and not file.empty:
             for i in range(len(file)):
                 row_data = ''.join([str(x).lower() for x in file.iloc[i].values.tolist() if pd.notna(x)])
+                self.logger.debug(f"{row_data}")
                 for tag in internal_tags:
-                    if tag.lower() in row_data:
-                        return row_data
+                    try:
+                        # ВСЕ теги обрабатываем как regex
+                        if re.search(tag, row_data, re.IGNORECASE):
+                            return row_data
+                    except re.error:
+                        # Если regex невалиден - ищем как обычный текст
+                        if tag.lower() in row_data:
+                            return row_data
         return False
 
     def share_info_from_xls_to_duplicates(self):
@@ -298,13 +352,14 @@ class PEDSorterApp(QtWidgets.QMainWindow):
             return None
         return opened_file
 
-    def create_name_for_local_estimate(self, filepath, filename):
+    def create_name_for_1_local_estimate(self, filepath, filename):
         """Создает новое имя для локальной сметы: """
         TARGET_TEXT = ['локальн', 'смета', 'сметный']
         ESTIMATE_NUMBER_UNKNOWN = '??-??-??'
         estimate_number = ESTIMATE_NUMBER_UNKNOWN
-        DEFAULT_VERSION = 'БАЗ'
-        version = DEFAULT_VERSION
+        version = self.DEFAULT_VERSION
+        version_number = self.DEFAULT_VERSION_NUMBER
+        const = 'ЛС'
         file = self.read_xls_xlsx_file(filepath)
         lines_to_chek = 20 #в скольких первых строках искать совпадения. весь файл = len(file)
         if file is not None and not file.empty:
@@ -317,15 +372,17 @@ class PEDSorterApp(QtWidgets.QMainWindow):
                             if re.search(r'^\d{2}-\d{2}(?:-\d{2})?$', number):
                                 estimate_number = number
                                 break
-        return f'ЛС-{estimate_number}-{version}-(ex. {filename[:10]}..)'
+        return f'{const}-{estimate_number}-{version}{version_number}-(ex. {filename[:self.EX_NAME_LENGTH]}..)'
 
-    def create_name_for_object_estimate(self, filepath, filename):
+    def create_name_for_2_object_estimate(self, filepath, filename):
         """Создает новое имя для объектной сметы: """
         TARGET_TEXT = ['объектн', 'смета', 'сметный']
         ESTIMATE_NUMBER_UNKNOWN = '??-??'
         estimate_number = ESTIMATE_NUMBER_UNKNOWN
         DEFAULT_VERSION = 'БАЗ'
         version = DEFAULT_VERSION
+        version_number = self.DEFAULT_VERSION_NUMBER
+        const = 'ОС'
         file = self.read_xls_xlsx_file(filepath)
         lines_to_chek = 20 #в скольких первых строках искать совпадения. весь файл = len(file)
         if file is not None and not file.empty:
@@ -340,15 +397,16 @@ class PEDSorterApp(QtWidgets.QMainWindow):
                                 self.logger.debug(f'!!!!!!!!!{number}!!!!!!!!!! {temp}')
                                 estimate_number = number
                                 break
-        return f'ОС-{estimate_number}-{version}-(ex. {filename[:10]}..)'
+        return f'{const}-{estimate_number}-{version}{version_number}-(ex. {filename[:self.EX_NAME_LENGTH]}..)'
 
-    def create_name_for_summary_estimate(self, filepath, filename):
+    def create_name_for_3_summary_estimate(self, filepath, filename):
         """Создает новое имя для сводного сметного расчета: """
         TARGET_TEXT = ['сводн', 'смета', 'сметный']
         ESTIMATE_NUMBER_UNKNOWN = '??'
         estimate_number = ESTIMATE_NUMBER_UNKNOWN
-        DEFAULT_VERSION = 'БАЗ'
-        version = DEFAULT_VERSION
+        version = self.DEFAULT_VERSION
+        version_number = self.DEFAULT_VERSION_NUMBER
+        const = 'ССР'
         file = self.read_xls_xlsx_file(filepath)
         lines_to_chek = 20 #в скольких первых строках искать совпадения. весь файл = len(file)
         if file is not None and not file.empty:
@@ -361,7 +419,43 @@ class PEDSorterApp(QtWidgets.QMainWindow):
                             if re.search(r'^\d{2}$', number):
                                 estimate_number = number
                                 break
-        return f'ОС-{estimate_number}-{version}-(ex. {filename[:10]}..)'
+        return f'{const}-{estimate_number}-{version}{version_number}-(ex. {filename[:self.EX_NAME_LENGTH]}..)'
+
+    def create_name_for_4_register_of_estimates(self, filepath, filename):
+        version = self.DEFAULT_VERSION
+        const = 'СРСД'
+        version_number = self.DEFAULT_VERSION_NUMBER
+        return f'{const}-{version}{version_number}-(ex. {filename[:self.EX_NAME_LENGTH]}..)'
+
+    def create_name_for_5_specific_types_of_costs(self, filepath, filename):
+        version = self.DEFAULT_VERSION
+        const = 'СРОВЗ'
+        version_number = self.DEFAULT_VERSION_NUMBER
+        return f'{const}-{version}{version_number}-(ex. {filename[:self.EX_NAME_LENGTH]}..)'
+    
+    def create_name_for_6_MTR_cost_change_table(self, filepath, filename):
+        version = self.DEFAULT_VERSION
+        const = 'ФОРМА1.3'
+        version_number = self.DEFAULT_VERSION_NUMBER
+        return f'{const}-{version}{version_number}-(ex. {filename[:self.EX_NAME_LENGTH]}..)'
+    
+    def create_name_for_7_other_expenses(self, filename, type):
+        version = self.DEFAULT_VERSION
+        const = 'ПРОЧ'
+        version_number = self.DEFAULT_VERSION_NUMBER
+        type_of_calculation = self.TYPES_7_AND_THEIR_CODENAMES[type]
+        return f'{const}-{type_of_calculation}-{version}{version_number}-(ex. {filename[:self.EX_NAME_LENGTH]}...)'
+
+    def create_name_for_8_supporting_documents(self, filename, type):
+        version = self.DEFAULT_VERSION
+        const = 'ПОДТВ'
+        version_number = self.DEFAULT_VERSION_NUMBER
+        type_of_document = self.TYPES_8_AND_THEIR_CODENAMSE[type]
+        self.amount_of_documents_8_type += 1
+        if type_of_document == 'Обоснование к расчету прочих затрат':
+            return f'{const}-{type_of_document}-ТИППРОЧ-{self.amount_of_documents_8_type}-{version}{version_number}-(ex. {filename[:self.EX_NAME_LENGTH]}...)'
+        else:
+            return f'{const}-{type_of_document}-{self.amount_of_documents_8_type}-{version}{version_number}-(ex. {filename[:self.EX_NAME_LENGTH]}...)'
 
     def populate_table(self):
         '''Заполняет таблицу найденными файлами.'''
@@ -380,12 +474,17 @@ class PEDSorterApp(QtWidgets.QMainWindow):
             else:
                 self.ui.Table.setItem(row, 4, QtWidgets.QTableWidgetItem(''))
             
-            if data['type'] == '?': #ЦВЕТА!
-                color = QtGui.QColor(236, 200, 174)
+            #ЦВЕТА!
+            if data['type'] == '?': 
+                color = QtGui.QColor(238, 186, 175)
                 for col in range(self.ui.Table.columnCount()):
                     self.ui.Table.item(row, col).setBackground(color)
-            else: #ЦВЕТА!
-                color = QtGui.QColor(221, 255, 217)
+            elif '?' in data['new_name']:
+                color = QtGui.QColor(238, 223, 175)
+                for col in range(self.ui.Table.columnCount()):
+                    self.ui.Table.item(row, col).setBackground(color)
+            else:
+                color = QtGui.QColor(213, 238, 175)
                 for col in range(self.ui.Table.columnCount()):
                     self.ui.Table.item(row, col).setBackground(color)
 
