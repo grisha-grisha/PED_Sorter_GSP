@@ -11,6 +11,7 @@ import pandas as pd
 from PySide6 import QtWidgets, QtGui, QtCore
 from PySide6.QtWidgets import QPushButton, QHBoxLayout, QWidget
 from PySide6.QtCore import QProcess, QFileInfo
+from PySide6.QtGui import QCursor, Qt
 
 from PED_design import Ui_MainWindow
 from tags_window_design import Ui_TagsWindow
@@ -162,22 +163,22 @@ class PEDSorterApp(QtWidgets.QMainWindow):
         self.tags_windows = {}
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
-        self.ui.ChoosePEDButton.clicked.connect(self.choose_ped)
-        self.TAGS_FOR_LOCAL_ESTIMATE = ['локальная смета', 'лс', 'лc', 'cмета']
-        self.TAGS_FOR_OBJECT_ESTIMATE = ['ОБЪЕКТНАЯ СМЕТА', 'ос']
+        
         self.UNKNOWN = '?'
-        self.BASE_NEW_NAME_FOR_LE = 'ЛС-??-01-БАЗ'
-        self.TYPES_NAMES = {
-            'local_estimate': '1. (локальная смета)',
-            }
         self.logger = setup_logging()
         self.filenames = dict()
+        self.ui.FilesList.itemDoubleClicked.connect(self._on_file_double_clicked)
+        self.ui.ChoosePEDButton.clicked.connect(self.choose_ped)
         self.ui.Table.cellDoubleClicked.connect(self.open_file_in_explorer)
-        self.directory = ''
+        self.ui.Table.cellChanged.connect(self.on_cell_changed)
         self.ui.SearchButton.clicked.connect(self.traverse_directory)
+        self.ui.Rename_Button.clicked.connect(self.rename_files)
+
+        self.table_is_full = False
+        self.directory = ''
         self.tags_manager = TagsManager()
         self._populate_files_list()
-        self.ui.FilesList.itemDoubleClicked.connect(self._on_file_double_clicked)
+        
         self.EX_NAME_LENGTH = 15
         self.DEFAULT_VERSION = 'БАЗ'
         self.DEFAULT_VERSION_NUMBER = ''
@@ -205,7 +206,6 @@ class PEDSorterApp(QtWidgets.QMainWindow):
             'Конъюнктурный анализ': 'КА'
         }
         self.amount_of_documents_8_type = 0
-
 
     def _open_tags_window(self, type_id):
         """Открывает окно управления тегами"""
@@ -245,6 +245,10 @@ class PEDSorterApp(QtWidgets.QMainWindow):
 
     def traverse_directory(self):
         '''Обходит выбранную директорию и все поддиректории.'''
+        QtWidgets.QApplication.setOverrideCursor(QtGui.QCursor(QtCore.Qt.BusyCursor))
+        files_count = 0
+        self.table_is_full = False
+        percent_processed = 0
         self.filenames = dict()
         for root, _, files in os.walk(self.directory):
             for filename in files:
@@ -263,15 +267,17 @@ class PEDSorterApp(QtWidgets.QMainWindow):
                         if any(tag.lower() in file_parts for tag in type_data["name_tags"]): #распознавание тэгов в имени
                             type = type_data["type"]
                             mask = type_data["mask"]
-                            break
+                            if type not in ['Подтверждающие документы', 'Расчеты на прочие затраты']:
+                                break
                     if self.ui.search_in_file_checkBox.isChecked():
                         if extension in ['.xls', '.xlsx']:
                             presence_tags_in_file = self.check_if_tags_in_file(type_data["internal_tags"], filepath)
                             if presence_tags_in_file:
                                 type = type_data["type"]
                                 mask = type_data["mask"]
-                                break
-                
+                                if type not in ['Подтверждающие документы', 'Расчеты на прочие затраты']:
+                                    break
+
                 #создание имен:
                 if type == 'Локальная смета':
                     new_name = self.create_name_for_1_local_estimate(filepath, filename)
@@ -290,7 +296,6 @@ class PEDSorterApp(QtWidgets.QMainWindow):
                 if type in self.TYPES_8_AND_THEIR_CODENAMSE.keys():
                     new_name = self.create_name_for_8_supporting_documents(filename, type)
 
-
                 self.filenames[filename] = {
                     'type': type,
                     'new_name': new_name,
@@ -298,6 +303,11 @@ class PEDSorterApp(QtWidgets.QMainWindow):
                     'extension': extension,
                     'filepath': filepath
                     }
+                files_count += 1
+                percent_processed = files_count * 100 // len(files)
+                self.ui.progressBar.setValue(percent_processed)
+                self.ui.loading_label.setText(f'Обработано файлов: {files_count}')
+                QtWidgets.QApplication.processEvents()
         self.share_info_from_xls_to_duplicates()
         self.populate_table()
 
@@ -307,7 +317,6 @@ class PEDSorterApp(QtWidgets.QMainWindow):
         if file is not None and not file.empty:
             for i in range(len(file)):
                 row_data = ''.join([str(x).lower() for x in file.iloc[i].values.tolist() if pd.notna(x)])
-                self.logger.debug(f"{row_data}")
                 for tag in internal_tags:
                     try:
                         # ВСЕ теги обрабатываем как regex
@@ -340,17 +349,86 @@ class PEDSorterApp(QtWidgets.QMainWindow):
             return None
         try:
             if str(filepath).lower().endswith('.xlsx'):
-                engine = 'openpyxl'
+                return self._read_xlsx_visible_sheet(filepath)
             elif str(filepath).lower().endswith('.xls'):
-                engine = 'xlrd'
+                return self._read_xls_visible_sheet(filepath)
             else:
-                self.logger.error(f"Неизвестный формат файла: {filepath}")
                 return None
-            opened_file = pd.read_excel(filepath, engine=engine, header=None)
         except Exception as e:
             self.logger.error(f"Ошибка чтения файла {filepath}: {str(e)}")
             return None
-        return opened_file
+
+    def _read_xlsx_visible_sheet(self, filepath):
+        """Чтение первого видимого листа для xlsx с проверкой sheet_state"""
+        try:
+            from openpyxl import load_workbook
+            # Загружаем книгу для проверки состояния листов
+            wb = load_workbook(filepath, read_only=True)
+            # Ищем первый видимый лист
+            visible_sheet_name = None
+            for sheet_name in wb.sheetnames:
+                sheet = wb[sheet_name]
+                if sheet.sheet_state == 'visible':  # 'visible', 'hidden', 'veryHidden'
+                    visible_sheet_name = sheet_name
+                    break
+            # Если не нашли видимый, берем первый несистемный
+            if visible_sheet_name is None:
+                for sheet_name in wb.sheetnames:
+                    if not sheet_name.startswith('_'):
+                        visible_sheet_name = sheet_name
+                        break
+            if visible_sheet_name is None:
+                self.logger.warning(f"Не найдено видимых листов в {filepath}")
+                return None
+            # Читаем через pandas
+            return pd.read_excel(filepath, sheet_name=visible_sheet_name, header=None, engine='openpyxl')
+        except ImportError:
+            # Fallback если openpyxl не установлен
+            return self._read_fallback(filepath, 'openpyxl')
+
+    def _read_xls_visible_sheet(self, filepath):
+        """Чтение первого видимого листа для xls (эвристический подход)"""
+        try:
+            excel_file = pd.ExcelFile(filepath, engine='xlrd')
+            # Эвристика: исключаем системные и технические листы
+            system_keywords = ['_', 'sheet', 'hidden', 'veryhidden', 'sys', 'temp']
+            for sheet_name in excel_file.sheet_names:
+                sheet_lower = sheet_name.lower()
+                # Пропускаем системные листы
+                if any(keyword in sheet_lower for keyword in system_keywords):
+                    continue
+                # Пропускаем листы с подозрительными именами
+                if sheet_lower.startswith(('~', '$')) or len(sheet_name.strip()) == 0:
+                    continue
+                # Пробуем прочитать лист
+                try:
+                    sheet_data = pd.read_excel(filepath, sheet_name=sheet_name, header=None, engine='xlrd')
+                    if not sheet_data.empty:
+                        return sheet_data
+                except:
+                    continue
+            # Fallback: первый несистемный лист
+            for sheet_name in excel_file.sheet_names:
+                if not sheet_name.startswith('_'):
+                    return pd.read_excel(filepath, sheet_name=sheet_name, header=None, engine='xlrd')
+            return None
+        except Exception as e:
+            self.logger.error(f"Ошибка чтения XLS {filepath}: {str(e)}")
+            return None
+
+    def _read_fallback(self, filepath, engine):
+        """Резервный метод чтения"""
+        try:
+            excel_file = pd.ExcelFile(filepath, engine=engine)
+        
+            # Простой фильтр системных листов
+            for sheet_name in excel_file.sheet_names:
+                if not sheet_name.startswith('_'):
+                    return pd.read_excel(filepath, sheet_name=sheet_name, header=None, engine=engine)
+                
+            return None
+        except:
+            return None
 
     def create_name_for_1_local_estimate(self, filepath, filename):
         """Создает новое имя для локальной сметы: """
@@ -369,7 +447,7 @@ class PEDSorterApp(QtWidgets.QMainWindow):
                     if tag in row_data:
                         if '№' in row_data:
                             number = row_data.split('№')[-1].strip()
-                            if re.search(r'^\d{2}-\d{2}(?:-\d{2})?$', number):
+                            if re.search(r'^\d{1,2}-\d{1,2}(?:-\d{1,2})?$', number):
                                 estimate_number = number
                                 break
         return f'{const}-{estimate_number}-{version}{version_number}-(ex. {filename[:self.EX_NAME_LENGTH]}..)'
@@ -392,9 +470,7 @@ class PEDSorterApp(QtWidgets.QMainWindow):
                     if tag in row_data:
                         if '№' in row_data:
                             number = row_data.split('№')[-1].strip()
-                            temp = re.search(r'^\d{2}(?:-\d{2})?$', number)
-                            if temp:
-                                self.logger.debug(f'!!!!!!!!!{number}!!!!!!!!!! {temp}')
+                            if re.search(r'^\d{1,2}(?:-\d{1,2})?$', number):
                                 estimate_number = number
                                 break
         return f'{const}-{estimate_number}-{version}{version_number}-(ex. {filename[:self.EX_NAME_LENGTH]}..)'
@@ -416,7 +492,7 @@ class PEDSorterApp(QtWidgets.QMainWindow):
                     if tag in row_data:
                         if '№' in row_data:
                             number = row_data.split('№')[-1].strip()
-                            if re.search(r'^\d{2}$', number):
+                            if re.search(r'^\d{1,2}$', number):
                                 estimate_number = number
                                 break
         return f'{const}-{estimate_number}-{version}{version_number}-(ex. {filename[:self.EX_NAME_LENGTH]}..)'
@@ -466,28 +542,29 @@ class PEDSorterApp(QtWidgets.QMainWindow):
             self.ui.Table.setItem(row, 2, QtWidgets.QTableWidgetItem(data['mask']))
             self.ui.Table.setItem(row, 3, QtWidgets.QTableWidgetItem(data['new_name'] + data['extension']))
 
-            if data['type'] != self.UNKNOWN:
-                checkbox_item = QtWidgets.QTableWidgetItem()
+            #ЦВЕТА и чекбоксы!
+            checkbox_item = QtWidgets.QTableWidgetItem()
+            if data['type'] == '?': # красный - тип неизвестен
+                checkbox_item.setFlags(QtCore.Qt.ItemIsEnabled)
+                checkbox_item.setCheckState(QtCore.Qt.Unchecked)
+                color = QtGui.QColor(238, 186, 175)
+            elif '?' in data['new_name']: # желтый - тип предполагаем, но имя составили не доконца
+                checkbox_item.setFlags(QtCore.Qt.ItemIsEnabled)
+                checkbox_item.setCheckState(QtCore.Qt.Unchecked)
+                color = QtGui.QColor(238, 223, 175) 
+            else: # зеленый - все сделал
                 checkbox_item.setFlags(QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsEnabled)
                 checkbox_item.setCheckState(QtCore.Qt.Checked)
-                self.ui.Table.setItem(row, 4, checkbox_item)
-            else:
-                self.ui.Table.setItem(row, 4, QtWidgets.QTableWidgetItem(''))
-            
-            #ЦВЕТА!
-            if data['type'] == '?': 
-                color = QtGui.QColor(238, 186, 175)
-                for col in range(self.ui.Table.columnCount()):
-                    self.ui.Table.item(row, col).setBackground(color)
-            elif '?' in data['new_name']:
-                color = QtGui.QColor(238, 223, 175)
-                for col in range(self.ui.Table.columnCount()):
-                    self.ui.Table.item(row, col).setBackground(color)
-            else:
                 color = QtGui.QColor(213, 238, 175)
-                for col in range(self.ui.Table.columnCount()):
-                    self.ui.Table.item(row, col).setBackground(color)
+            self.ui.Table.setItem(row, 4, checkbox_item)
+            for col in range(self.ui.Table.columnCount()):
+                self.ui.Table.item(row, col).setBackground(color)
 
+        self.setCursor(QtGui.QCursor(QtCore.Qt.ArrowCursor))
+        QtWidgets.QApplication.restoreOverrideCursor()
+        self.ui.loading_label.setText(f'Готово! всего файлов: {len(self.filenames.keys())}')
+        self.table_is_full = True
+    
     def open_file_in_explorer(self, row, column):
         '''Открывает файл в проводнике при двойном клике на имя файла (колонка 0)'''
         if column == 0:
@@ -501,8 +578,73 @@ class PEDSorterApp(QtWidgets.QMainWindow):
             else:
                 QtWidgets.QMessageBox.warning(self, 'Ошибка', f'Файл не найден:\n{file_path}')
 
+    def on_cell_changed(self, row, column):
+        """Обрабатывает изменения в ячейках таблицы"""
+        if column == 3 and self.table_is_full:  # Изменился 3-й столбец (новые имена)
+            self.update_row_status(row)
+
+    def update_row_status(self, row):
+        """Обновляет статус строки на основе нового имени файла"""
+        name_item = self.ui.Table.item(row, 3)
+        if not name_item:
+            return
+        new_name = name_item.text()
+        is_valid = self.is_name_valid(new_name, row)
+        checkbox_item = self.ui.Table.item(row, 4)
+        if not checkbox_item:
+            return
+        if is_valid:
+            color = QtGui.QColor(213, 238, 175)  # Зеленый
+            checkbox_item.setFlags(QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsEnabled)
+            checkbox_item.setCheckState(QtCore.Qt.Checked)
+        else:
+            color = QtGui.QColor(238, 223, 175)  # Желтый
+            checkbox_item.setFlags(QtCore.Qt.ItemIsEnabled)  # Только для просмотра
+            checkbox_item.setCheckState(QtCore.Qt.Unchecked)
+
+        for col in range(self.ui.Table.columnCount()):
+            item = self.ui.Table.item(row, col)
+            if item:
+                item.setBackground(color)
+
+    def is_name_valid(self, new_name, current_row):
+        """Проверяет валидность нового имени"""
+        if not new_name.strip():
+            return False
+        if '?' in new_name:
+            return False
+        for row in range(self.ui.Table.rowCount()):
+            if row == current_row:
+                continue
+            item = self.ui.Table.item(row, 3)
+            if item and item.text() == new_name:
+                return False
+        if not re.match(r'^[a-zA-Zа-яА-ЯёЁ0-9_\-\.\(\) ]+$', new_name):
+            return False
+
+        original_name_item = self.ui.Table.item(current_row, 0)
+        if not original_name_item:
+            return False
+
+        original_name = original_name_item.text()
+        original_extension = os.path.splitext(original_name)[1].lower()
+
+        new_extension = os.path.splitext(new_name)[1].lower()
+        self.logger.debug(f'новое расширение: {new_extension}, старое: {original_name}')
+        if new_extension != original_extension:
+            return False
+
+        new_name_without_ext = os.path.splitext(new_name)[0]
+        if not new_name_without_ext.strip():
+            return False
+
+        if new_name_without_ext == '.' or new_name_without_ext == '':
+            return False
+        return True
+
 
 def setup_logging():
+    """Настройки логирования."""
     log_dir = "logs"
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
