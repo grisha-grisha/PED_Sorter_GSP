@@ -116,7 +116,7 @@
        <string>Выбранная дирректория:</string>
       </property>
      </widget>
-     <widget class="QPushButton" name="pushButton">
+     <widget class="QPushButton" name="instruction_Button">
       <property name="geometry">
        <rect>
         <x>630</x>
@@ -280,6 +280,17 @@
         </font>
        </property>
       </column>
+      <column>
+       <property name="text">
+        <string>Номер сметы</string>
+       </property>
+       <property name="font">
+        <font>
+         <weight>75</weight>
+         <bold>true</bold>
+        </font>
+       </property>
+      </column>
      </widget>
      <widget class="QListWidget" name="FilesList">
       <property name="geometry">
@@ -356,13 +367,13 @@
      <property name="lineWidth">
       <number>3</number>
      </property>
-     <widget class="QPushButton" name="SearchButton_2">
+     <widget class="QPushButton" name="Rename_Button">
       <property name="enabled">
        <bool>false</bool>
       </property>
       <property name="geometry">
        <rect>
-        <x>410</x>
+        <x>620</x>
         <y>10</y>
         <width>91</width>
         <height>31</height>
@@ -411,6 +422,9 @@
       </property>
      </widget>
      <widget class="QCheckBox" name="search_in_file_checkBox">
+      <property name="enabled">
+       <bool>true</bool>
+      </property>
       <property name="geometry">
        <rect>
         <x>100</x>
@@ -421,6 +435,9 @@
       </property>
       <property name="text">
        <string>искать по тэгам в содержимом файла</string>
+      </property>
+      <property name="checkable">
+       <bool>true</bool>
       </property>
       <property name="checked">
        <bool>true</bool>
@@ -440,9 +457,12 @@
       </property>
      </widget>
      <widget class="QRadioButton" name="rename_radioButton">
+      <property name="enabled">
+       <bool>true</bool>
+      </property>
       <property name="geometry">
        <rect>
-        <x>510</x>
+        <x>370</x>
         <y>10</y>
         <width>201</width>
         <height>17</height>
@@ -451,6 +471,9 @@
       <property name="text">
        <string>переименовать эти файлы</string>
       </property>
+      <property name="checkable">
+       <bool>true</bool>
+      </property>
       <property name="checked">
        <bool>false</bool>
       </property>
@@ -458,14 +481,14 @@
      <widget class="QRadioButton" name="rename_radioButton_2">
       <property name="geometry">
        <rect>
-        <x>510</x>
+        <x>370</x>
         <y>30</y>
-        <width>201</width>
+        <width>291</width>
         <height>17</height>
        </rect>
       </property>
       <property name="text">
-       <string>создать копии с новым именем</string>
+       <string>создать новую дирректорию с копиями</string>
       </property>
       <property name="checked">
        <bool>true</bool>

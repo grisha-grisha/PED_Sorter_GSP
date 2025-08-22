@@ -6,7 +6,13 @@ from pathlib import Path
 import logging
 from logging.handlers import RotatingFileHandler
 from datetime import datetime
+import shutil
 
+
+import pytesseract
+from pdf2image import convert_from_path
+from PIL import Image
+import tempfile
 import pandas as pd
 from PySide6 import QtWidgets, QtGui, QtCore
 from PySide6.QtWidgets import QPushButton, QHBoxLayout, QWidget
@@ -15,6 +21,10 @@ from PySide6.QtGui import QCursor, Qt
 
 from PED_design import Ui_MainWindow
 from tags_window_design import Ui_TagsWindow
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+tesseract_path = os.path.join(current_dir, 'Tesseract-OCR', 'tesseract.exe')
+readme_path = os.path.join(current_dir, 'README.txt')
 
 
 class TagsManager:
@@ -139,8 +149,7 @@ class TagsWindow(QtWidgets.QMainWindow):
                 if self.tags_manager.add_tag(self.type_id, new_tag, tag_area):
                     self.ui.TagList_2.addItem(new_tag)
                     self.ui.tag_lineEdit_2.clear()
-        
-                
+                 
     def _delete_tag(self, tag_area):
         """Удаляет выбранный тег"""
         if tag_area == 'name_tags':
@@ -173,8 +182,11 @@ class PEDSorterApp(QtWidgets.QMainWindow):
         self.ui.Table.cellChanged.connect(self.on_cell_changed)
         self.ui.SearchButton.clicked.connect(self.traverse_directory)
         self.ui.Rename_Button.clicked.connect(self.rename_files)
+        self.ui.instruction_Button.clicked.connect(self.show_instruction)
 
         self.table_is_full = False
+        self.ui.Rename_Button.setEnabled(False)
+
         self.directory = ''
         self.tags_manager = TagsManager()
         self._populate_files_list()
@@ -207,6 +219,18 @@ class PEDSorterApp(QtWidgets.QMainWindow):
         }
         self.amount_of_documents_8_type = 0
 
+    def show_instruction(self):
+        try:
+            if not os.path.exists(readme_path):
+                QtWidgets.QMessageBox.warning(self, "Ошибка", 
+                                            "Файл инструкций README.txt не найден!")
+                return
+            if sys.platform == 'win32':
+                os.startfile(readme_path)
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(self, "Ошибка", 
+                                        f"Не удалось открыть инструкцию:\n{str(e)}")
+
     def _open_tags_window(self, type_id):
         """Открывает окно управления тегами"""
         if type_id in self.tags_windows:
@@ -234,7 +258,6 @@ class PEDSorterApp(QtWidgets.QMainWindow):
 
     def choose_ped(self):
         '''Обработчик кнопки "Выбрать ПСД".'''
-        self.amount_of_documents_8_type = 0
         directory = QtWidgets.QFileDialog.getExistingDirectory(self, "Выберите папку ПСД")
         if directory:
             self.ui.DirectoryName.setText(directory)
@@ -248,6 +271,7 @@ class PEDSorterApp(QtWidgets.QMainWindow):
         QtWidgets.QApplication.setOverrideCursor(QtGui.QCursor(QtCore.Qt.BusyCursor))
         files_count = 0
         self.table_is_full = False
+        self.ui.Rename_Button.setEnabled(False)
         percent_processed = 0
         self.filenames = dict()
         for root, _, files in os.walk(self.directory):
@@ -260,7 +284,7 @@ class PEDSorterApp(QtWidgets.QMainWindow):
                 new_name = self.UNKNOWN
                 mask = self.UNKNOWN
 
-                #выяснить, что за тип:
+                # выяснить, что за тип:
                 for type_id, type_data in self.tags_manager.tags_data.items():
                     if self.ui.search_in_name_checkBox.isChecked():
                         file_parts = re.split(r'[_\-. ]+', filename.lower())
@@ -270,15 +294,14 @@ class PEDSorterApp(QtWidgets.QMainWindow):
                             if type not in ['Подтверждающие документы', 'Расчеты на прочие затраты']:
                                 break
                     if self.ui.search_in_file_checkBox.isChecked():
-                        if extension in ['.xls', '.xlsx']:
-                            presence_tags_in_file = self.check_if_tags_in_file(type_data["internal_tags"], filepath)
-                            if presence_tags_in_file:
-                                type = type_data["type"]
-                                mask = type_data["mask"]
-                                if type not in ['Подтверждающие документы', 'Расчеты на прочие затраты']:
-                                    break
+                        presence_tags_in_file = self.check_if_tags_in_file(type_data["internal_tags"], filepath)
+                        if presence_tags_in_file:
+                            type = type_data["type"]
+                            mask = type_data["mask"]
+                            if type not in ['Подтверждающие документы', 'Расчеты на прочие затраты']:
+                                break
 
-                #создание имен:
+                # создание имен:
                 if type == 'Локальная смета':
                     new_name = self.create_name_for_1_local_estimate(filepath, filename)
                 if type == 'Объектная смета':
@@ -311,19 +334,74 @@ class PEDSorterApp(QtWidgets.QMainWindow):
         self.share_info_from_xls_to_duplicates()
         self.populate_table()
 
+    def extract_text_from_pdf_first_page(self, pdf_path, lang='rus+eng'):
+        """
+        Извлекает текст с первой страницы PDF используя OCR
+        """
+        try:
+            images = convert_from_path(pdf_path, first_page=1, last_page=1, dpi=300)
+            if not images:
+                return ""
+
+            with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as temp_file:
+                images[0].save(temp_file.name, 'JPEG')
+                temp_image_path = temp_file.name
+
+            text = pytesseract.image_to_string(Image.open(temp_image_path), lang=lang)
+
+            os.unlink(temp_image_path)
+            
+            return text.lower()
+            
+        except Exception as e:
+            print(f"Ошибка OCR обработки {pdf_path}: {str(e)}")
+            return ""
+
+    def check_tags_in_pdf(self, pdf_path, tags):
+        """
+        Проверяет наличие тегов в PDF файле
+        """
+        # Извлекаем текст с первой страницы
+        pdf_text = self.extract_text_from_pdf_first_page(pdf_path)
+        
+        if not pdf_text:
+            return False
+        
+        # Проверяем каждый тег
+        for tag in tags:
+            # Если тег - регулярное выражение
+            if isinstance(tag, str) and any(c in tag for c in ['[', '(', '*', '+', '?', '{', '}']):
+                try:
+                    if re.search(tag, pdf_text, re.IGNORECASE):
+                        return True
+                except re.error:
+                    # Если regex невалиден, ищем как обычный текст
+                    if tag.lower() in pdf_text:
+                        return True
+            else:
+                # Обычный текстовый поиск
+                if tag.lower() in pdf_text:
+                    return True
+        
+        return False
+
     def check_if_tags_in_file(self, internal_tags, filepath):
-        """Проверяет, встречаются ли тэги в файле"""
+        """Проверяет, встречаются ли тэги в файле (поддерживает PDF и Excel)"""
+        
+        # Для PDF файлов используем OCR
+        if str(filepath).lower().endswith('.pdf'):
+            return self.check_tags_in_pdf(filepath, internal_tags)
+        
+        # Для Excel файлов - обычная обработка
         file = self.read_xls_xlsx_file(filepath)
         if file is not None and not file.empty:
             for i in range(len(file)):
                 row_data = ''.join([str(x).lower() for x in file.iloc[i].values.tolist() if pd.notna(x)])
                 for tag in internal_tags:
                     try:
-                        # ВСЕ теги обрабатываем как regex
                         if re.search(tag, row_data, re.IGNORECASE):
                             return row_data
                     except re.error:
-                        # Если regex невалиден - ищем как обычный текст
                         if tag.lower() in row_data:
                             return row_data
         return False
@@ -362,13 +440,12 @@ class PEDSorterApp(QtWidgets.QMainWindow):
         """Чтение первого видимого листа для xlsx с проверкой sheet_state"""
         try:
             from openpyxl import load_workbook
-            # Загружаем книгу для проверки состояния листов
             wb = load_workbook(filepath, read_only=True)
             # Ищем первый видимый лист
             visible_sheet_name = None
             for sheet_name in wb.sheetnames:
                 sheet = wb[sheet_name]
-                if sheet.sheet_state == 'visible':  # 'visible', 'hidden', 'veryHidden'
+                if sheet.sheet_state == 'visible':
                     visible_sheet_name = sheet_name
                     break
             # Если не нашли видимый, берем первый несистемный
@@ -380,10 +457,8 @@ class PEDSorterApp(QtWidgets.QMainWindow):
             if visible_sheet_name is None:
                 self.logger.warning(f"Не найдено видимых листов в {filepath}")
                 return None
-            # Читаем через pandas
             return pd.read_excel(filepath, sheet_name=visible_sheet_name, header=None, engine='openpyxl')
         except ImportError:
-            # Fallback если openpyxl не установлен
             return self._read_fallback(filepath, 'openpyxl')
 
     def _read_xls_visible_sheet(self, filepath):
@@ -564,6 +639,8 @@ class PEDSorterApp(QtWidgets.QMainWindow):
         QtWidgets.QApplication.restoreOverrideCursor()
         self.ui.loading_label.setText(f'Готово! всего файлов: {len(self.filenames.keys())}')
         self.table_is_full = True
+        self.amount_of_documents_8_type = 0
+        self.ui.Rename_Button.setEnabled(True)
     
     def open_file_in_explorer(self, row, column):
         '''Открывает файл в проводнике при двойном клике на имя файла (колонка 0)'''
@@ -630,7 +707,6 @@ class PEDSorterApp(QtWidgets.QMainWindow):
         original_extension = os.path.splitext(original_name)[1].lower()
 
         new_extension = os.path.splitext(new_name)[1].lower()
-        self.logger.debug(f'новое расширение: {new_extension}, старое: {original_name}')
         if new_extension != original_extension:
             return False
 
@@ -641,6 +717,90 @@ class PEDSorterApp(QtWidgets.QMainWindow):
         if new_name_without_ext == '.' or new_name_without_ext == '':
             return False
         return True
+
+    def rename_files(self):
+        """Копирует файлы с новыми именами"""
+        target_dir = QtWidgets.QFileDialog.getExistingDirectory(
+            self, "Выберите папку для сохранения"
+        )
+        
+        if not target_dir:
+            return
+        
+        target_path = Path(target_dir)
+        results = {'success': 0, 'errors': 0, 'skipped': 0}
+        
+        for row in range(self.ui.Table.rowCount()):
+            # Пропускаем неотмеченные строки
+            checkbox_item = self.ui.Table.item(row, 4)
+            if not checkbox_item or checkbox_item.checkState() != QtCore.Qt.Checked:
+                results['skipped'] += 1
+                continue
+            
+            # Получаем имена
+            original_name_item = self.ui.Table.item(row, 0)
+            new_name_item = self.ui.Table.item(row, 3)
+            
+            if not original_name_item or not new_name_item:
+                results['errors'] += 1
+                continue
+            
+            original_name = original_name_item.text()
+            new_name = new_name_item.text()
+
+            if not self.is_name_valid(new_name, row):
+                results['errors'] += 1
+                continue
+
+            # Проверяем наличие файла в словаре
+            if original_name not in self.filenames:
+                self.logger.error(f"Файл {original_name} не найден")
+                results['errors'] += 1
+                continue
+            
+            file_info = self.filenames[original_name]
+            source_path = Path(file_info['filepath'])
+            
+            # Проверяем исходный файл
+            if not source_path.exists():
+                self.logger.error(f"Файл не существует: {source_path}")
+                results['errors'] += 1
+                continue
+            
+            # Создаем целевую директорию если не существует
+            target_path.mkdir(exist_ok=True)
+            
+            # Копируем файл
+            try:
+                target_file_path = target_path / new_name
+                
+                # Обработка дубликатов
+                if target_file_path.exists():
+                    reply = QtWidgets.QMessageBox.question(
+                        self, "Файл существует",
+                        f"Файл {new_name} уже существует. Перезаписать?",
+                        QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No
+                    )
+                    if reply == QtWidgets.QMessageBox.No:
+                        results['skipped'] += 1
+                        continue
+                
+                shutil.copy2(source_path, target_file_path)
+                results['success'] += 1
+                self.logger.info(f"Скопирован: {original_name} -> {new_name}")
+                
+            except Exception as e:
+                self.logger.error(f"Ошибка: {original_name} -> {new_name}: {str(e)}")
+                results['errors'] += 1
+        
+        # Отчет о результатах
+        msg = (
+            f"Операция завершена:\n"
+            f"Успешно: {results['success']}\n"
+            f"Ошибок: {results['errors']}\n"
+            f"Пропущено: {results['skipped']}"
+        )
+        QtWidgets.QMessageBox.information(self, "Результат", msg)
 
 
 def setup_logging():
